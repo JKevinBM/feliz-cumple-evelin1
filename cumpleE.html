@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Para Evelin ✨</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body {
+      background-color: #020205;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #fff;
+    }
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #intro-ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+    .orb-zone {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .orb-core {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ffffff 15%, #c084fc 60%, rgba(147, 51, 234, 0) 100%);
+      box-shadow: 0 0 50px 20px rgba(255, 255, 255, 0.9), 0 0 110px 45px rgba(192, 132, 252, 0.6);
+      animation: pulseCore 2.2s infinite alternate ease-in-out;
+      transition: transform 0.2s ease;
+    }
+    .progress-ring {
+      position: absolute;
+      width: 190px;
+      height: 190px;
+      transform: rotate(-90deg);
+    }
+    .progress-ring-circle {
+      stroke: rgba(255, 255, 255, 0.9);
+      stroke-width: 4;
+      stroke-linecap: round;
+      fill: transparent;
+      stroke-dasharray: 565.48;
+      stroke-dashoffset: 565.48;
+      transition: stroke-dashoffset 0.05s linear;
+    }
+    .instruction {
+      margin-top: 35px;
+      font-size: 0.82rem;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.85);
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+      text-align: center;
+      max-width: 82%;
+      line-height: 1.5;
+    }
+
+    #footer-quote {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      width: 90%;
+      max-width: 480px;
+      font-size: 0.9rem;
+      letter-spacing: 1.2px;
+      color: rgba(255, 255, 255, 0.92);
+      text-shadow: 0 0 15px rgba(200, 160, 255, 0.8);
+      text-align: center;
+      line-height: 1.6;
+      opacity: 0;
+      transition: opacity 1.8s ease, transform 1.8s ease;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #footer-quote.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      z-index: 20;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s ease-out;
+    }
+
+    @keyframes pulseCore {
+      0% { transform: scale(0.92); }
+      100% { transform: scale(1.08); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="flash"></div>
+
+  <div id="intro-ui">
+    <div class="orb-zone">
+      <svg class="progress-ring">
+        <circle class="progress-ring-circle" id="ringProgress" cx="95" cy="95" r="90" />
+      </svg>
+      <div class="orb-core" id="orbCore"></div>
+    </div>
+    <div class="instruction">Mantén presionado para crear tu universo</div>
+  </div>
+
+  <div id="footer-quote">
+    De todos los universos posibles, este nació para ti ✨
+  </div>
+
+  <div id="webgl-canvas"></div>
+
+  <script>
+    const introUi = document.getElementById('intro-ui');
+    const footerQuote = document.getElementById('footer-quote');
+    const ringProgress = document.getElementById('ringProgress');
+    const orbCore = document.getElementById('orbCore');
+    const flash = document.getElementById('flash');
+
+    const circumference = 2 * Math.PI * 90;
+    ringProgress.style.strokeDasharray = `${circumference} ${circumference}`;
+    ringProgress.style.strokeDashoffset = circumference;
+
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x020205, 0.00035);
+
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 5000);
+    camera.position.set(0, 0, 500);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x020205, 1);
+    document.getElementById('webgl-canvas').appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0x1e1935, 1.8);
+    scene.add(ambientLight);
+
+    const frontLight = new THREE.DirectionalLight(0xffffff, 1.7);
+    frontLight.position.set(0, 60, 400);
+    scene.add(frontLight);
+
+    function createGasTexture(c1, c2, c3) {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0.0, c1);
+      grad.addColorStop(0.3, c2);
+      grad.addColorStop(0.7, c3 || c1);
+      grad.addColorStop(1.0, c1);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 256);
+
+      for (let i = 0; i < 30; i++) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.08})`;
+        ctx.fillRect(0, Math.random() * 256, 512, Math.random() * 6 + 2);
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    function createRingTexture(ringColor) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 1;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 256, 0);
+      grad.addColorStop(0.0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.25, ringColor);
+      grad.addColorStop(0.5, 'rgba(0,0,0,0.15)');
+      grad.addColorStop(0.8, ringColor);
+      grad.addColorStop(1.0, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 1);
+      return new THREE.CanvasTexture(c);
+    }
+
+    // 1. Sistema Solar en el fondo inferior
+    const solarSystem = new THREE.Group();
+    solarSystem.position.set(0, -180, -850);
+    solarSystem.rotation.x = 0.28;
+    scene.add(solarSystem);
+
+    const sunGeo = new THREE.SphereGeometry(36, 32, 32);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff6e8 });
+    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+    solarSystem.add(sunMesh);
+
+    const coronaCanvas = document.createElement('canvas');
+    coronaCanvas.width = 128;
+    coronaCanvas.height = 128;
+    const cCtx = coronaCanvas.getContext('2d');
+    const cGrad = cCtx.createRadialGradient(64, 64, 10, 64, 64, 64);
+    cGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    cGrad.addColorStop(0.3, 'rgba(253, 230, 138, 0.85)');
+    cGrad.addColorStop(0.65, 'rgba(168, 85, 247, 0.3)');
+    cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    cCtx.fillStyle = cGrad;
+    cCtx.fillRect(0, 0, 128, 128);
+
+    const coronaTexture = new THREE.CanvasTexture(coronaCanvas);
+    const coronaSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: coronaTexture,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      opacity: 0.9
+    }));
+    coronaSprite.scale.set(180, 180, 1);
+    solarSystem.add(coronaSprite);
+
+    const sunLight = new THREE.PointLight(0xffedd5, 2.8, 1400);
+    solarSystem.add(sunLight);
+
+    const bgPlanetsData = [
+      { dist: 85, r: 4.2, speed: 0.022, colors: ['#94a3b8', '#64748b', '#475569'] },
+      { dist: 130, r: 6.8, speed: 0.016, colors: ['#38bdf8', '#0284c7', '#0f172a'] },
+      { dist: 190, r: 11.5, speed: 0.011, colors: ['#d97706', '#b45309', '#78350f'] },
+      { dist: 255, r: 9.5, speed: 0.007, colors: ['#e2e8f0', '#cbd5e1', '#94a3b8'], ring: true }
+    ];
+    const activeBgPlanets = [];
+
+    bgPlanetsData.forEach(p => {
+      const oGeo = new THREE.BufferGeometry();
+      const oPts = [];
+      for (let i = 0; i <= 64; i++) {
+        const theta = (i / 64) * Math.PI * 2;
+        oPts.push(Math.cos(theta) * p.dist, 0, Math.sin(theta) * p.dist);
+      }
+      oGeo.setAttribute('position', new THREE.Float32BufferAttribute(oPts, 3));
+      solarSystem.add(new THREE.Line(oGeo, new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.14 })));
+
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(p.r, 24, 24),
+        new THREE.MeshStandardMaterial({ map: createGasTexture(p.colors[0], p.colors[1], p.colors[2]), roughness: 0.5 })
+      );
+
+      if (p.ring) {
+        const rMesh = new THREE.Mesh(
+          new THREE.RingGeometry(p.r * 1.4, p.r * 2.4, 32),
+          new THREE.MeshBasicMaterial({ map: createRingTexture('rgba(226, 232, 240, 0.6)'), side: THREE.DoubleSide, transparent: true })
+        );
+        rMesh.rotation.x = Math.PI / 2.3;
+        mesh.add(rMesh);
+      }
+
+      solarSystem.add(mesh);
+      activeBgPlanets.push({ mesh, dist: p.dist, speed: p.speed, angle: Math.random() * Math.PI * 2 });
+    });
+
+    solarSystem.visible = false;
+
+    // 2. Planetas del espacio medio
+    const midPlanetsGroup = new THREE.Group();
+    scene.add(midPlanetsGroup);
+
+    const midPlanetsList = [
+      { x: 260, y: -160, z: -180, r: 34, rotZ: 0.45, ring: true, c: ['#fef3c7', '#d97706', '#92400e'], rc: 'rgba(253, 230, 138, 0.65)' },
+      { x: -270, y: 170, z: -140, r: 26, rotZ: -0.4, ring: true, c: ['#38bdf8', '#0369a1', '#0c4a6e'], rc: 'rgba(186, 230, 253, 0.55)' },
+      { x: -210, y: 110, z: 20, r: 19, rotZ: 0, ring: false, c: ['#ea580c', '#9a3412', '#431407'] },
+      { x: 190, y: 160, z: 10, r: 21, rotZ: 0, ring: false, c: ['#f1f5f9', '#94a3b8', '#475569'] },
+      { x: 330, y: -70, z: -250, r: 14, rotZ: 0, ring: false, c: ['#7dd3fc', '#0284c7', '#082f49'] }
+    ];
+
+    const activeMidPlanets = [];
+    midPlanetsList.forEach(item => {
+      const pMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(item.r, 40, 40),
+        new THREE.MeshStandardMaterial({
+          map: createGasTexture(item.c[0], item.c[1], item.c[2]),
+          roughness: 0.45,
+          metalness: 0.1
+        })
+      );
+      pMesh.position.set(item.x, item.y, item.z);
+      pMesh.rotation.z = item.rotZ;
+
+      if (item.ring) {
+        const rGeo = new THREE.RingGeometry(item.r * 1.4, item.r * 2.5, 48);
+        const rMesh = new THREE.Mesh(
+          rGeo,
+          new THREE.MeshStandardMaterial({
+            map: createRingTexture(item.rc),
+            side: THREE.DoubleSide,
+            transparent: true,
+            roughness: 0.4
+          })
+        );
+        rMesh.rotation.x = Math.PI / 2.2;
+        pMesh.add(rMesh);
+      }
+
+      midPlanetsGroup.add(pMesh);
+      activeMidPlanets.push(pMesh);
+    });
+
+    midPlanetsGroup.visible = false;
+
+    // 3. Campo estelar profundo
+    const starCount = 1900;
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = new Float32Array(starCount * 3);
+    const starCols = new Float32Array(starCount * 3);
+
+    for (let i = 0; i < starCount; i++) {
+      starPos[i * 3] = (Math.random() - 0.5) * 3600;
+      starPos[i * 3 + 1] = (Math.random() - 0.5) * 3600;
+      starPos[i * 3 + 2] = (Math.random() - 0.5) * 2800;
+
+      const c = new THREE.Color().setHSL(Math.random() > 0.4 ? 0 : Math.random() * 0.8, 0.4, Math.random() * 0.5 + 0.5);
+      starCols[i * 3] = c.r;
+      starCols[i * 3 + 1] = c.g;
+      starCols[i * 3 + 2] = c.b;
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(starCols, 3));
+
+    const starField = new THREE.Points(starGeo, new THREE.PointsMaterial({
+      size: 2.3,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.88
+    }));
+    scene.add(starField);
+
+    // 4. Texto en Blanco Diamante
+    const messages = ["¡FELIZ", "CUMPLEAÑOS", "EVELIN ✨"];
+    let currentMsgIdx = 0;
+    const PARTICLE_COUNT = 3400;
+
+    const textGeo = new THREE.BufferGeometry();
+    const textPositions = new Float32Array(PARTICLE_COUNT * 3);
+    const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+    const explosionVelocities = new Float32Array(PARTICLE_COUNT * 3);
+    const textColors = new Float32Array(PARTICLE_COUNT * 3);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      textPositions[i * 3] = 0;
+      textPositions[i * 3 + 1] = 0;
+      textPositions[i * 3 + 2] = 0;
+
+      const phi = Math.random() * Math.PI * 2;
+      const theta = Math.acos((Math.random() * 2) - 1);
+      const speed = Math.random() * 28 + 14;
+      explosionVelocities[i * 3] = speed * Math.sin(theta) * Math.cos(phi);
+      explosionVelocities[i * 3 + 1] = speed * Math.sin(theta) * Math.sin(phi);
+      explosionVelocities[i * 3 + 2] = speed * Math.cos(theta);
+
+      const randColor = Math.random();
+      const col = new THREE.Color();
+      if (randColor < 0.75) {
+        col.setRGB(1.0, 1.0, 1.0);
+      } else if (randColor < 0.90) {
+        col.setRGB(0.70, 0.92, 1.0);
+      } else {
+        col.setRGB(1.0, 0.78, 0.92);
+      }
+
+      textColors[i * 3] = col.r;
+      textColors[i * 3 + 1] = col.g;
+      textColors[i * 3 + 2] = col.b;
+    }
+    textGeo.setAttribute('position', new THREE.BufferAttribute(textPositions, 3));
+    textGeo.setAttribute('color', new THREE.BufferAttribute(textColors, 3));
+
+    const pCanvas = document.createElement('canvas');
+    pCanvas.width = 16;
+    pCanvas.height = 16;
+    const pCtx = pCanvas.getContext('2d');
+    const pGrad = pCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    pGrad.addColorStop(0, 'rgba(255,255,255,1)');
+    pGrad.addColorStop(0.35, 'rgba(255,255,255,0.92)');
+    pGrad.addColorStop(0.7, 'rgba(235,245,255,0.4)');
+    pGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    pCtx.fillStyle = pGrad;
+    pCtx.fillRect(0, 0, 16, 16);
+    const pTex = new THREE.CanvasTexture(pCanvas);
+
+    const textMesh = new THREE.Points(textGeo, new THREE.PointsMaterial({
+      size: 5.4,
+      map: pTex,
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    }));
+    scene.add(textMesh);
+    textMesh.visible = false;
+
+    function calculateWord3DPoints(word) {
+      const c = document.createElement('canvas');
+      const cx = c.getContext('2d');
+      const isMobile = width < 768;
+
+      const fSize = isMobile ? Math.min(width * 0.22, 68) : 88;
+      c.width = 1024;
+      c.height = 256;
+
+      cx.font = `900 ${fSize}px "Segoe UI", Arial, sans-serif`;
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      cx.fillStyle = '#fff';
+      cx.fillText(word, 512, 128);
+
+      const data = cx.getImageData(0, 0, 1024, 256).data;
+      const pts = [];
+      const step = isMobile ? 3 : 4;
+
+      for (let y = 0; y < 256; y += step) {
+        for (let x = 0; x < 1024; x += step) {
+          if (data[(y * 1024 + x) * 4 + 3] > 120) {
+            pts.push({
+              x: (x - 512) * (isMobile ? 0.72 : 0.85),
+              y: (128 - y) * (isMobile ? 0.72 : 0.85),
+              z: (Math.random() - 0.5) * 16
+            });
+          }
+        }
+      }
+      return pts;
+    }
+
+    function setTargetWord(word) {
+      const pts = calculateWord3DPoints(word);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const pt = pts[i % pts.length];
+        targetPositions[i * 3] = pt.x + (Math.random() - 0.5) * 4;
+        targetPositions[i * 3 + 1] = pt.y + (Math.random() - 0.5) * 4;
+        targetPositions[i * 3 + 2] = pt.z + (Math.random() - 0.5) * 12;
+      }
+    }
+
+    // 5. Cometas con estela luminosa
+    const comets = [];
+    const cometMat = new THREE.LineBasicMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.95 });
+
+    function spawnComet(customX, customY) {
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(6);
+
+      const startX = customX !== undefined ? (customX - width / 2) * 1.2 : (Math.random() * 800 - 300);
+      const startY = customY !== undefined ? (height / 2 - customY) * 1.2 + 80 : (380 + Math.random() * 180);
+      const startZ = Math.random() * 250 - 200;
+
+      pos[0] = startX; pos[1] = startY; pos[2] = startZ;
+      pos[3] = startX; pos[4] = startY; pos[5] = startZ;
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+
+      const line = new THREE.Line(geo, cometMat.clone());
+      scene.add(line);
+
+      comets.push({
+        line: line,
+        x: startX, y: startY, z: startZ,
+        vx: -(Math.random() * 14 + 13),
+        vy: -(Math.random() * 16 + 14),
+        len: Math.random() * 95 + 75,
+        opacity: 1
+      });
+    }
+
+    // 6. Interacción y Navegación
+    let state = 'waiting';
+    let isPressing = false;
+    let charge = 0;
+
+    function triggerBigBang() {
+      state = 'exploding';
+      introUi.style.opacity = '0';
+      flash.style.opacity = '1';
+
+      setTimeout(() => {
+        introUi.style.display = 'none';
+        flash.style.opacity = '0';
+        solarSystem.visible = true;
+        midPlanetsGroup.visible = true;
+        textMesh.visible = true;
+        state = 'active';
+
+        setTargetWord(messages[0]);
+
+        setTimeout(() => {
+          currentMsgIdx = 1;
+          setTargetWord(messages[1]);
+        }, 2800);
+
+        setTimeout(() => {
+          currentMsgIdx = 2;
+          setTargetWord(messages[2]);
+          footerQuote.classList.add('show');
+        }, 5600);
+
+      }, 700);
+    }
+
+    let rotX = 0, rotY = 0;
+    let targetRotX = 0, targetRotY = 0;
+    let lastX = 0, lastY = 0;
+    let isDragging = false;
+    let touchStartTime = 0;
+    let startTouchX = 0, startTouchY = 0;
+    let targetCameraZ = 500;
+
+    window.addEventListener('wheel', (e) => {
+      if (state === 'active') {
+        targetCameraZ += e.deltaY * 0.45;
+        targetCameraZ = Math.max(220, Math.min(850, targetCameraZ));
+      }
+    }, { passive: true });
+
+    function startAction(cx, cy) {
+      lastX = cx;
+      lastY = cy;
+      startTouchX = cx;
+      startTouchY = cy;
+      touchStartTime = Date.now();
+
+      if (state === 'waiting') isPressing = true;
+      else isDragging = true;
+    }
+
+    function moveAction(cx, cy) {
+      if (isDragging) {
+        const dx = cx - lastX;
+        const dy = cy - lastY;
+        lastX = cx;
+        lastY = cy;
+        targetRotY += dx * 0.004;
+        targetRotX += dy * 0.004;
+      }
+    }
+
+    function stopAction(cx, cy) {
+      const elapsed = Date.now() - touchStartTime;
+      const movedDist = Math.hypot((cx || lastX) - startTouchX, (cy || lastY) - startTouchY);
+
+      if (state === 'waiting') {
+        isPressing = false;
+        if (charge >= 1) triggerBigBang();
+        else {
+          charge = 0;
+          ringProgress.style.strokeDashoffset = circumference;
+          orbCore.style.transform = 'scale(1)';
+        }
+      } else if (state === 'active') {
+        if (elapsed < 300 && movedDist < 15) {
+          for (let i = 0; i < 2; i++) {
+            setTimeout(() => {
+              spawnComet((cx || lastX) + (Math.random() - 0.5) * 120, (cy || lastY) + (Math.random() - 0.5) * 120);
+            }, i * 120);
+          }
+        }
+      }
+      isDragging = false;
+    }
+
+    window.addEventListener('mousedown', (e) => startAction(e.clientX, e.clientY));
+    window.addEventListener('mousemove', (e) => moveAction(e.clientX, e.clientY));
+    window.addEventListener('mouseup', (e) => stopAction(e.clientX, e.clientY));
+
+    let lastPinch = 0;
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        startAction(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        lastPinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) {
+        moveAction(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2 && state === 'active') {
+        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        targetCameraZ -= (d - lastPinch) * 1.5;
+        targetCameraZ = Math.max(220, Math.min(850, targetCameraZ));
+        lastPinch = d;
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', (e) => {
+      stopAction(lastX, lastY);
+    });
+
+    window.addEventListener('resize', () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+      if (state === 'active') setTargetWord(messages[currentMsgIdx]);
+    });
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      if (state === 'waiting') {
+        if (isPressing) {
+          charge += 0.022;
+          if (charge > 1) charge = 1;
+          orbCore.style.transform = `scale(${1 + charge * 0.35})`;
+        } else if (charge > 0) {
+          charge -= 0.04;
+          if (charge < 0) charge = 0;
+        }
+        ringProgress.style.strokeDashoffset = circumference - (charge * circumference);
+        if (charge >= 1) triggerBigBang();
+      }
+
+      rotX += (targetRotX - rotX) * 0.08;
+      rotY += (targetRotY - rotY) * 0.08;
+      camera.position.z += (targetCameraZ - camera.position.z) * 0.08;
+
+      scene.rotation.y = rotY;
+      scene.rotation.x = rotX;
+      scene.rotation.y += 0.0006;
+
+      if (solarSystem.visible) {
+        sunMesh.rotation.y += 0.004;
+        coronaSprite.scale.set(180 + Math.sin(time * 3) * 8, 180 + Math.sin(time * 3) * 8, 1);
+
+        activeBgPlanets.forEach(p => {
+          p.angle += p.speed;
+          p.mesh.position.x = Math.cos(p.angle) * p.dist;
+          p.mesh.position.z = Math.sin(p.angle) * p.dist;
+          p.mesh.rotation.y += 0.02;
+        });
+
+        activeMidPlanets.forEach((p, idx) => {
+          p.rotation.y += 0.008 + idx * 0.002;
+        });
+      }
+
+      if (state === 'exploding') {
+        const p = textGeo.attributes.position.array;
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          p[i * 3] += explosionVelocities[i * 3];
+          p[i * 3 + 1] += explosionVelocities[i * 3 + 1];
+          p[i * 3 + 2] += explosionVelocities[i * 3 + 2];
+          explosionVelocities[i * 3] *= 0.92;
+          explosionVelocities[i * 3 + 1] *= 0.92;
+          explosionVelocities[i * 3 + 2] *= 0.92;
+        }
+        textGeo.attributes.position.needsUpdate = true;
+      } else if (state === 'active') {
+        const p = textGeo.attributes.position.array;
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const tx = targetPositions[i * 3];
+          const ty = targetPositions[i * 3 + 1];
+          const tz = targetPositions[i * 3 + 2];
+
+          const floatOffset = Math.sin(time * 2 + i) * 0.6;
+          p[i * 3] += (tx - p[i * 3]) * 0.085 + floatOffset * 0.02;
+          p[i * 3 + 1] += (ty - p[i * 3 + 1]) * 0.085 + floatOffset * 0.02;
+          p[i * 3 + 2] += (tz - p[i * 3 + 2]) * 0.085;
+        }
+        textGeo.attributes.position.needsUpdate = true;
+
+        if (Math.random() < 0.038 && comets.length < 7) {
+          spawnComet();
+        }
+
+        for (let i = comets.length - 1; i >= 0; i--) {
+          const c = comets[i];
+          c.x += c.vx;
+          c.y += c.vy;
+          c.opacity -= 0.015;
+
+          const pArr = c.line.geometry.attributes.position.array;
+          pArr[0] = c.x;
+          pArr[1] = c.y;
+          pArr[2] = c.z;
+          pArr[3] = c.x - c.vx * (c.len / 16);
+          pArr[4] = c.y - c.vy * (c.len / 16);
+          pArr[5] = c.z;
+          c.line.geometry.attributes.position.needsUpdate = true;
+          c.line.material.opacity = Math.max(0, c.opacity);
+
+          if (c.opacity <= 0 || c.y < -450) {
+            scene.remove(c.line);
+            c.line.geometry.dispose();
+            c.line.material.dispose();
+            comets.splice(i, 1);
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
